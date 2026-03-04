@@ -1,4 +1,5 @@
 import { open } from "@tauri-apps/plugin-shell";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LazyStore } from "@tauri-apps/plugin-store";
 
 const API = "https://0xfrag.com";
@@ -147,6 +148,8 @@ async function loginViaBrowser() {
         await open(`${API}?state=${encodeURIComponent(state)}`);
         const token = await pollForToken(state);
         await addAccount(token);
+        const win = getCurrentWindow();
+        await win.setFocus();
         showAuthenticated();
     } catch (e) {
         status(e.message || "Auth failed", true);
