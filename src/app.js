@@ -5,13 +5,21 @@ import { LazyStore } from "@tauri-apps/plugin-store";
 const API = "https://0xfrag.com";
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
-let jwt = null;
+let accounts = [];
+let activeIndex = 0;
 const store = new LazyStore("auth.json");
+
+// Active JWT shorthand
+function activeJwt() {
+    return accounts[activeIndex]?.jwt ?? null;
+}
 
 // --- DOM ---
 
 const $stepLogin = document.getElementById("step-login");
+const $stepAccounts = document.getElementById("step-accounts");
 const $stepAuthenticated = document.getElementById("step-authenticated");
+const $accountList = document.getElementById("account-list");
 const $displayUsername = document.getElementById("display-username");
 const $displayUserId = document.getElementById("display-user-id");
 const $displayUserWallet = document.getElementById("display-user-wallet");
@@ -26,13 +34,14 @@ function status(msg, isError = false) {
 
 function showStep(step) {
     $stepLogin.hidden = step !== "login";
+    $stepAccounts.hidden = step !== "accounts";
     $stepAuthenticated.hidden = step !== "authenticated";
 }
 
-async function api(method, path, body = null, auth = false) {
+async function api(method, path, body = null, jwt = null) {
     const headers = {};
     if (body) headers["Content-Type"] = "application/json";
-    if (auth && jwt) headers["Authorization"] = `Bearer ${jwt}`;
+    if (jwt) headers["Authorization"] = `Bearer ${jwt}`;
     const res = await fetch(`${API}${path}`, {
         method,
         headers,
@@ -48,11 +57,74 @@ async function api(method, path, body = null, auth = false) {
     return text ? JSON.parse(text) : null;
 }
 
+// --- Persistence ---
+
+async function saveAccounts() {
+    await store.set("accounts", accounts);
+    await store.set("activeIndex", activeIndex);
+    await store.save();
+}
+
+async function loadAccounts() {
+    accounts = (await store.get("accounts")) || [];
+    activeIndex = (await store.get("activeIndex")) || 0;
+    if (activeIndex >= accounts.length) activeIndex = 0;
+}
+
+// --- Account management ---
+
+async function addAccount(jwt) {
+    const me = await api("GET", "/api/auth/me", null, jwt);
+    const entry = {
+        jwt,
+        username: me.username || null,
+        wallet: me.wallet_address,
+        id: me.id,
+    };
+
+    // Update existing account with same id, or append
+    const existing = accounts.findIndex((a) => a.id === entry.id);
+    if (existing !== -1) {
+        accounts[existing] = entry;
+        activeIndex = existing;
+    } else {
+        accounts.push(entry);
+        activeIndex = accounts.length - 1;
+    }
+
+    await saveAccounts();
+}
+
+function removeAccount(index) {
+    accounts.splice(index, 1);
+    if (accounts.length === 0) {
+        activeIndex = 0;
+    } else if (activeIndex >= accounts.length) {
+        activeIndex = accounts.length - 1;
+    }
+    return saveAccounts();
+}
+
+async function switchAccount(index) {
+    activeIndex = index;
+    try {
+        status("Validating session...");
+        const me = await api("GET", "/api/auth/me", null, accounts[index].jwt);
+        // Refresh cached info
+        accounts[index].username = me.username || null;
+        accounts[index].wallet = me.wallet_address;
+        await saveAccounts();
+        showAuthenticated(me);
+    } catch {
+        status("Session expired — account removed", true);
+        await removeAccount(index);
+        renderAccountSelector();
+    }
+}
+
 // --- Deep link URL parsing ---
 
 function parseDeepLink(urlStr) {
-    // Extract token and state from xfrag://callback?token=...&state=...
-    // Use URL parser, with manual fallback for edge cases
     try {
         const url = new URL(urlStr);
         if (url.protocol === "xfrag:" && url.hostname === "callback") {
@@ -64,7 +136,6 @@ function parseDeepLink(urlStr) {
     } catch {
         // Fallback: manual string parsing
     }
-    // Manual fallback — handles cases where URL() parser fails on custom schemes
     if (urlStr.startsWith("xfrag://callback")) {
         const qs = urlStr.split("?")[1];
         if (qs) {
@@ -93,7 +164,6 @@ async function loginViaBrowser() {
                 reject(new Error("Auth timed out (5 min)"));
             }, AUTH_TIMEOUT_MS);
 
-            // onOpenUrl receives urls: string[] from the deep-link plugin
             onOpenUrl((urls) => {
                 for (const urlStr of urls) {
                     const parsed = parseDeepLink(urlStr);
@@ -117,10 +187,8 @@ async function loginViaBrowser() {
         await open(`${API}?state=${encodeURIComponent(state)}`);
 
         const token = await authPromise;
-        jwt = token;
-        await store.set("jwt", jwt);
-        await store.save();
-        await showAuthenticated();
+        await addAccount(token);
+        showAuthenticated();
     } catch (e) {
         status(e.message || "Auth failed", true);
     } finally {
@@ -129,28 +197,69 @@ async function loginViaBrowser() {
     }
 }
 
-async function showAuthenticated() {
-    try {
-        const account = await api("GET", "/api/auth/me", null, true);
-        $displayUsername.textContent = account.username || "\u2014";
-        $displayUserId.textContent = account.id;
-        $displayUserWallet.textContent = account.wallet_address;
-
-        showStep("authenticated");
-        status("");
-    } catch (e) {
-        jwt = null;
-        await store.delete("jwt");
-        showStep("login");
-        status("Session expired — login again", true);
+function showAuthenticated(me) {
+    const acct = accounts[activeIndex];
+    if (me) {
+        $displayUsername.textContent = me.username || "\u2014";
+        $displayUserId.textContent = me.id;
+        $displayUserWallet.textContent = me.wallet_address;
+    } else {
+        $displayUsername.textContent = acct?.username || "\u2014";
+        $displayUserId.textContent = acct?.id || "";
+        $displayUserWallet.textContent = acct?.wallet || "";
     }
+    showStep("authenticated");
+    status("");
 }
 
 async function logout() {
-    jwt = null;
-    await store.delete("jwt");
-    showStep("login");
+    await removeAccount(activeIndex);
+    if (accounts.length > 0) {
+        renderAccountSelector();
+    } else {
+        showStep("login");
+    }
     status("");
+}
+
+// --- Account selector UI ---
+
+function truncateWallet(wallet) {
+    if (!wallet || wallet.length <= 12) return wallet || "";
+    return wallet.slice(0, 6) + "..." + wallet.slice(-4);
+}
+
+function renderAccountSelector() {
+    $accountList.innerHTML = "";
+    accounts.forEach((acct, i) => {
+        const row = document.createElement("div");
+        row.className = "account-item" + (i === activeIndex ? " active" : "");
+
+        const info = document.createElement("div");
+        info.className = "account-item-info";
+        info.innerHTML =
+            `<span class="account-item-name">${acct.username || "\u2014"}</span>` +
+            `<span class="account-item-wallet">${truncateWallet(acct.wallet)}</span>`;
+        info.addEventListener("click", () => switchAccount(i));
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "account-item-remove";
+        removeBtn.textContent = "\u00D7";
+        removeBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            await removeAccount(i);
+            if (accounts.length === 0) {
+                showStep("login");
+            } else {
+                renderAccountSelector();
+            }
+        });
+
+        row.appendChild(info);
+        row.appendChild(removeBtn);
+        $accountList.appendChild(row);
+    });
+    showStep("accounts");
 }
 
 // --- Handle deep links received at cold startup ---
@@ -162,9 +271,7 @@ async function handleStartupDeepLink() {
         for (const urlStr of urls) {
             const parsed = parseDeepLink(urlStr);
             if (parsed && parsed.token) {
-                jwt = parsed.token;
-                await store.set("jwt", jwt);
-                await store.save();
+                await addAccount(parsed.token);
                 return true;
             }
         }
@@ -177,8 +284,14 @@ async function handleStartupDeepLink() {
 // --- Events ---
 
 document.getElementById("btn-login").addEventListener("click", loginViaBrowser);
+document.getElementById("btn-add-account").addEventListener("click", loginViaBrowser);
 document.getElementById("btn-logout").addEventListener("click", logout);
+document.getElementById("btn-back").addEventListener("click", () => {
+    renderAccountSelector();
+    status("");
+});
 document.getElementById("btn-play").addEventListener("click", async () => {
+    const jwt = activeJwt();
     const container = document.getElementById("game-container");
     try {
         status("Connecting to game server...");
@@ -204,19 +317,36 @@ document.getElementById("btn-play").addEventListener("click", async () => {
 
 (async () => {
     try {
-        // Check if app was cold-launched via a deep link (e.g. xfrag://callback?token=...)
+        await loadAccounts();
+
+        // Migrate from old single-jwt format
+        if (accounts.length === 0) {
+            const oldJwt = await store.get("jwt");
+            if (oldJwt) {
+                try {
+                    await addAccount(oldJwt);
+                    await store.delete("jwt");
+                    await store.save();
+                } catch {
+                    await store.delete("jwt");
+                    await store.save();
+                }
+            }
+        }
+
+        // Check if app was cold-launched via a deep link
         const fromDeepLink = await handleStartupDeepLink();
         if (fromDeepLink) {
-            await showAuthenticated();
+            showAuthenticated();
             return;
         }
 
-        // Otherwise check stored JWT
-        jwt = await store.get("jwt");
-        if (jwt) {
-            await showAuthenticated();
-        } else {
+        if (accounts.length === 0) {
             showStep("login");
+        } else if (accounts.length === 1) {
+            await switchAccount(0);
+        } else {
+            renderAccountSelector();
         }
     } catch {
         showStep("login");

@@ -177,6 +177,71 @@ button:disabled {
     justify-content: space-between;
 }
 
+/* --- Account selector --- */
+
+#account-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.account-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid #333;
+    padding: 0.6rem 0.8rem;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+.account-item:hover {
+    border-color: #888;
+}
+
+.account-item.active {
+    border-color: #fff;
+}
+
+.account-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.account-item-name {
+    font-size: 0.85rem;
+    color: #e0e0e0;
+}
+
+.account-item-wallet {
+    font-size: 0.75rem;
+    color: #666;
+    text-transform: uppercase;
+}
+
+.account-item-remove {
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 0.2rem 0.5rem;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    background: transparent;
+    line-height: 1;
+}
+
+.account-item-remove:hover {
+    color: #f44336;
+}
+
+#btn-add-account {
+    width: 100%;
+}
+
 #game-container {
     position: fixed;
     top: 0;

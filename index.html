@@ -19,6 +19,12 @@
             <button id="btn-login">Login via Browser</button>
         </div>
 
+        <!-- Account selector -->
+        <div id="step-accounts" hidden>
+            <div id="account-list"></div>
+            <button id="btn-add-account">Add Account</button>
+        </div>
+
         <!-- Authenticated -->
         <div id="step-authenticated" hidden>
             <table class="account-info">
@@ -27,6 +33,7 @@
                 <tr><td class="label">Wallet address</td><td id="display-user-wallet"></td></tr>
             </table>
             <div class="action-buttons">
+                <button id="btn-back">Back</button>
                 <button id="btn-logout">Logout</button>
                 <button id="btn-play">Play</button>
             </div>
