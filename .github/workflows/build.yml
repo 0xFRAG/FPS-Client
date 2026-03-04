@@ -72,8 +72,7 @@ jobs:
       - name: Build Tauri app
         run: pnpm tauri build
         env:
-          # Skip macOS code signing for dev builds
-          APPLE_SIGNING_IDENTITY: ""
+          APPLE_SIGNING_IDENTITY: "-"
 
       # ── Upload artifacts ──
       - name: Upload Linux artifacts
