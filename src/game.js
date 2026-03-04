@@ -24,7 +24,7 @@ export async function startGame(container, token) {
 
     // Event message handler (roster, join, leave, chat)
     function handleEventMessage(msg) {
-        if (connectionState !== 'connected' && msg.type !== "chat" && msg.type !== "roster") return;
+        if (connectionState !== 'connected' && msg.type !== "roster") return;
         switch (msg.type) {
             case "roster":
                 playerNames.clear();
@@ -313,7 +313,7 @@ export async function startGame(container, token) {
                 chatHud.input.value = "";
                 chatHud.input.style.display = "none";
                 chatFocused = false;
-            } else {
+            } else if (connectionState === 'connected') {
                 chatHud.input.style.display = "block";
                 chatHud.input.focus();
                 chatFocused = true;
@@ -672,6 +672,10 @@ export async function startGame(container, token) {
 
         const cleanupActions = [];
 
+        // Register event listener BEFORE connect so we capture the roster
+        const unlistenEvent = await onServerEvent(handleEventMessage);
+        cleanupActions.push(() => unlistenEvent());
+
         try {
             // 1. Connect via Tauri command (Rust handles WT)
             const result = await connect(token, domain, STREAM_HOST, STREAM_PORT);
@@ -770,11 +774,7 @@ export async function startGame(container, token) {
             });
             cleanupActions.push(() => unlistenWS());
 
-            // 6. Listen for server events (roster, join, leave, chat)
-            const unlistenEvent = await onServerEvent(handleEventMessage);
-            cleanupActions.push(() => unlistenEvent());
-
-            // 7. Listen for transport close
+            // 6. Listen for transport close
             const unlistenClose = await onTransportClosed(() => {
                 if (currentServerDomain === domain && connectionState === 'connected') {
                     if (serverCleanup) {
