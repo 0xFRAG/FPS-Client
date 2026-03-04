@@ -17,4 +17,3 @@ tracing-subscriber = "0.3"
 tauri-plugin-deep-link = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-store = "2"
-tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }

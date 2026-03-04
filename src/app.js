@@ -1,4 +1,4 @@
-import { onOpenUrl, getCurrent } from "@tauri-apps/plugin-deep-link";
+import { getCurrent } from "@tauri-apps/plugin-deep-link";
 import { open } from "@tauri-apps/plugin-shell";
 import { LazyStore } from "@tauri-apps/plugin-store";
 
@@ -151,49 +151,33 @@ function parseDeepLink(urlStr) {
 
 // --- Auth ---
 
+async function pollForToken(state) {
+    const deadline = Date.now() + AUTH_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+        try {
+            const res = await fetch(`${API}/api/auth/pending/${encodeURIComponent(state)}`);
+            if (res.ok) {
+                const data = await res.json();
+                return data.token;
+            }
+        } catch {
+            // Network error, retry
+        }
+        await new Promise((r) => setTimeout(r, 250));
+    }
+    throw new Error("Auth timed out (5 min)");
+}
+
 async function loginViaBrowser() {
     const state = crypto.randomUUID();
-    let unlisten = null;
-    let timeout = null;
-
     try {
         status("Waiting for browser auth...");
-
-        const authPromise = new Promise((resolve, reject) => {
-            timeout = setTimeout(() => {
-                reject(new Error("Auth timed out (5 min)"));
-            }, AUTH_TIMEOUT_MS);
-
-            onOpenUrl((urls) => {
-                for (const urlStr of urls) {
-                    const parsed = parseDeepLink(urlStr);
-                    if (!parsed) continue;
-
-                    if (!parsed.token) {
-                        reject(new Error("Callback missing token"));
-                        return;
-                    }
-                    if (parsed.state !== state) {
-                        reject(new Error("State mismatch — possible replay"));
-                        return;
-                    }
-
-                    resolve(parsed.token);
-                    return;
-                }
-            }).then((fn) => { unlisten = fn; });
-        });
-
         await open(`${API}?state=${encodeURIComponent(state)}`);
-
-        const token = await authPromise;
+        const token = await pollForToken(state);
         await addAccount(token);
         showAuthenticated();
     } catch (e) {
         status(e.message || "Auth failed", true);
-    } finally {
-        if (timeout) clearTimeout(timeout);
-        if (unlisten) unlisten();
     }
 }
 
