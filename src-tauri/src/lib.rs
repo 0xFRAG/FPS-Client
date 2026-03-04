@@ -1,6 +1,7 @@
 mod transport;
 
 use std::sync::Arc;
+use tauri::Emitter;
 use tokio::sync::Mutex;
 use transport::TransportState;
 
