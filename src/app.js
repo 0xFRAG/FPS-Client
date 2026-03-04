@@ -1,4 +1,3 @@
-import { getCurrent } from "@tauri-apps/plugin-deep-link";
 import { open } from "@tauri-apps/plugin-shell";
 import { LazyStore } from "@tauri-apps/plugin-store";
 
@@ -122,33 +121,6 @@ async function switchAccount(index) {
     }
 }
 
-// --- Deep link URL parsing ---
-
-function parseDeepLink(urlStr) {
-    try {
-        const url = new URL(urlStr);
-        if (url.protocol === "xfrag:" && url.hostname === "callback") {
-            return {
-                token: url.searchParams.get("token"),
-                state: url.searchParams.get("state"),
-            };
-        }
-    } catch {
-        // Fallback: manual string parsing
-    }
-    if (urlStr.startsWith("xfrag://callback")) {
-        const qs = urlStr.split("?")[1];
-        if (qs) {
-            const params = new URLSearchParams(qs);
-            return {
-                token: params.get("token"),
-                state: params.get("state"),
-            };
-        }
-    }
-    return null;
-}
-
 // --- Auth ---
 
 async function pollForToken(state) {
@@ -246,25 +218,6 @@ function renderAccountSelector() {
     showStep("accounts");
 }
 
-// --- Handle deep links received at cold startup ---
-
-async function handleStartupDeepLink() {
-    try {
-        const urls = await getCurrent();
-        if (!urls) return false;
-        for (const urlStr of urls) {
-            const parsed = parseDeepLink(urlStr);
-            if (parsed && parsed.token) {
-                await addAccount(parsed.token);
-                return true;
-            }
-        }
-    } catch {
-        // No startup deep link
-    }
-    return false;
-}
-
 // --- Events ---
 
 document.getElementById("btn-login").addEventListener("click", loginViaBrowser);
@@ -316,13 +269,6 @@ document.getElementById("btn-play").addEventListener("click", async () => {
                     await store.save();
                 }
             }
-        }
-
-        // Check if app was cold-launched via a deep link
-        const fromDeepLink = await handleStartupDeepLink();
-        if (fromDeepLink) {
-            showAuthenticated();
-            return;
         }
 
         if (accounts.length === 0) {
