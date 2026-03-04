@@ -56,8 +56,7 @@ export async function startGame(container, token) {
                 break;
             }
             case "chat": {
-                const chatInfo = playerNames.get(msg.player_id);
-                const chatName = chatInfo ? chatInfo.username : "unknown";
+                const chatName = msg.username || playerNames.get(msg.player_id)?.username || "unknown";
                 chatHud.addChatLine(`${chatName}: ${msg.text}`);
                 break;
             }
