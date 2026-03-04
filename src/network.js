@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-export const STREAM_HOST = "eu-lobby.tunnelforce.com";
+export const STREAM_HOST = "eu-lobby.0xfrag.com";
 export const STREAM_PORT = 4433;
-export const DEFAULT_SERVER = "eu-lobby.tunnelforce.com";
+export const DEFAULT_SERVER = "eu-lobby.0xfrag.com";
 
 export async function connect(token, server, streamHost, streamPort) {
     return await invoke("connect", {
