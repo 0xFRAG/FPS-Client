@@ -11,10 +11,6 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {
-            // With the "deep-link" feature, URLs from new instances are
-            // automatically forwarded to onOpenUrl on the JS side.
-        }))
         .manage(state as transport::SharedState)
         .invoke_handler(tauri::generate_handler![
             transport::connect,
