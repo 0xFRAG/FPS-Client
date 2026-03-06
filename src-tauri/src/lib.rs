@@ -35,7 +35,7 @@ pub fn run() {
 
     let state = Arc::new(Mutex::new(TransportState::default()));
 
-    let app = tauri::Builder::default()
+    let mut app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(state as transport::SharedState)
@@ -47,12 +47,10 @@ pub fn run() {
             capture_mouse,
             release_mouse,
         ])
-        .setup(|app| {
-            app.set_device_event_filter(tauri::DeviceEventFilter::Never);
-            Ok(())
-        })
         .build(tauri::generate_context!())
         .expect("error building tauri application");
+
+    app.set_device_event_filter(tauri::DeviceEventFilter::Never);
 
     app.run(|app_handle, event| {
         if let tauri::RunEvent::MouseMotion { dx, dy, .. } = event {
