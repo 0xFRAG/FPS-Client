@@ -20,6 +20,19 @@ fn release_mouse(window: tauri::WebviewWindow) -> Result<(), String> {
 }
 
 pub fn run() {
+    // Write panics to a crash log next to the executable
+    std::panic::set_hook(Box::new(|info| {
+        let msg = format!("{info}\n");
+        let path = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join("crash.log")))
+            .unwrap_or_else(|| std::path::PathBuf::from("crash.log"));
+        let _ = std::fs::write(&path, &msg);
+        eprintln!("{msg}");
+    }));
+
+    tracing_subscriber::fmt::init();
+
     let state = Arc::new(Mutex::new(TransportState::default()));
 
     let app = tauri::Builder::default()
