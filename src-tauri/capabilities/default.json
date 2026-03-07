@@ -8,6 +8,11 @@
     "core:event:allow-listen",
     "core:event:allow-emit",
     "shell:allow-open",
-    "store:default"
+    "store:default",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "core:window:allow-request-user-attention",
+    "core:window:allow-set-cursor-grab",
+    "core:window:allow-set-cursor-visible"
   ]
 }

@@ -149,7 +149,9 @@ async function loginViaBrowser() {
         const token = await pollForToken(state);
         await addAccount(token);
         const win = getCurrentWindow();
+        await win.unminimize();
         await win.setFocus();
+        await win.requestUserAttention(2);
         showAuthenticated();
     } catch (e) {
         status(e.message || "Auth failed", true);
